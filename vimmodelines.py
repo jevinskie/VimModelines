@@ -20,7 +20,7 @@ def plugin_loaded():
     print('Loaded {}'.format(PLUGIN_NAME))
 
     # call on_load(), since files will probably load before the plugin (async)
-    listener = sys.modules[__name__].plugins[0]
+    listener = sys.modules[__name__].__plugins__[0]
     for w in sublime.windows():
         for g in range(w.num_groups()):
             listener.on_load(w.active_view_in_group(g))
@@ -98,6 +98,10 @@ class VimModelinesApplyCommand(Common, sublime_plugin.WindowCommand):
                     view.set_line_endings('unix')
                 if value == 'mac':
                     view.set_line_endings('CR')
+            elif attr in ('filetype', 'ft'):
+                syntax_path = filetype_to_syntax_path(value)
+                if syntax_path is not None:
+                    view.settings().set('syntax', syntax_path)
             elif attr == 'wrap':
                 view.settings().set('word_wrap', True)
             elif attr == 'nowrap':
@@ -114,6 +118,17 @@ class VimModelinesApplyCommand(Common, sublime_plugin.WindowCommand):
                 else:
                     view.run_command('set_encoding',
                                      {'encoding': target_encoding})
+
+    @staticmethod
+    def filetype_to_syntax_path(ft):
+        if ft == 'sh':
+            return 'Packages/ShellScript/Shell-Unix-Generic.sublime-syntax'
+        elif ft in ('bash', 'zsh'):
+            return 'Packages/ShellScript/Bash.sublime-syntax'
+        elif ft == 'make':
+            return 'Packages/Makefile/Makefile.sublime-syntax'
+        else:
+            return None
 
     @staticmethod
     def header_and_footer(view, line_count):
