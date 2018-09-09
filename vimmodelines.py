@@ -113,7 +113,7 @@ class VimModelinesApplyCommand(Common, sublime_plugin.WindowCommand):
                 if value == 'mac':
                     view.set_line_endings('CR')
             elif attr in ('filetype', 'ft'):
-                syntax_path = filetype_to_syntax_path(value)
+                syntax_path = self.filetype_to_syntax_path(value)
                 if syntax_path is not None:
                     view.settings().set('syntax', syntax_path)
             elif attr == 'wrap':
