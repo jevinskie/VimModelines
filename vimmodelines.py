@@ -9,7 +9,6 @@ from .lib.encoding import ENCODING_MAP
 import re
 import sublime
 import sublime_plugin
-import sys
 
 
 PLUGIN_NAME = 'VimModelines'
@@ -19,11 +18,10 @@ SETTINGS_FILE = 'VimModelines.sublime-settings'
 def plugin_loaded():
     print('Loaded {}'.format(PLUGIN_NAME))
 
-    # call on_load(), since files will probably load before the plugin (async)
-    listener = sys.modules[__name__].__plugins__[0]
+    # call on_load(), since files may load before the plugin (async)
     for w in sublime.windows():
         for g in range(w.num_groups()):
-            listener.on_load(w.active_view_in_group(g))
+            VimModelines.instance.on_load(w.active_view_in_group(g))
 
 
 def plugin_unloaded():
@@ -47,6 +45,12 @@ class Common():
 class VimModelines(Common, sublime_plugin.EventListener):
     '''Event listener to invoke the command on load & save'''
 
+    instance = None  # last loaded instance (due to 3.1)
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        VimModelines.instance = self
+
     def on_load(self, view):
         if self.settings.get('apply_on_load', True):
             view.window().run_command('vim_modelines_apply')
@@ -62,9 +66,19 @@ class VimModelines(Common, sublime_plugin.EventListener):
 class VimModelinesApplyCommand(Common, sublime_plugin.WindowCommand):
     '''Command containing the main logic'''
 
-    __modeline_RX = re.compile('vim(?:\d*):\s*(?:set)?\s*(.*)$')
-    __attr_sep_RX = re.compile('[: ]')
-    __attr_kvp_RX = re.compile('([^=]+)=?([^=]*)')
+    __modeline_RX = re.compile(r'''
+        (?:^vim?                # begin line with either vi or vim
+            | \s(?:vim? | ex))  # ... or whitespace then vi, vim, or ex
+        (?:\d*):                # optional version digits, closed with :
+        \s*                     # optional whitespace after ~vim700:
+        (?:                     # alternation of type 1 & 2 modelines
+            (?:set?[ ])([^ ].*):.*$ # type 2: optional set or se, spc, opts, :
+            | (?!set?[ ])([^ ].*)$  # type 1: everything following
+        )
+    ''', re.VERBOSE)
+
+    __attr_sep_RX = re.compile(r'[:\s]')
+    __attr_kvp_RX = re.compile(r'([^=]+)=?([^=]*)')
 
     def run(self):
         view = self.window.active_view()
@@ -153,7 +167,7 @@ class VimModelinesApplyCommand(Common, sublime_plugin.WindowCommand):
         match = cls.__modeline_RX.search(line)
 
         if match:
-            modeline, = match.groups()
+            modeline = ''.join(m for m in match.groups() if m)
             attrs = [cls.__attr_kvp_RX.match(attr).groups()
                      for attr in filter(bool,
                                         cls.__attr_sep_RX.split(modeline))]
